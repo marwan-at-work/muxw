@@ -228,3 +228,44 @@ func TestTrailingSlash(t *testing.T) {
 		})
 	}
 }
+
+func TestNotFoundHandler(t *testing.T) {
+	r := muxw.NewRouter()
+	var helloCalled int
+	var notFoundCalled int
+	r.Get("/hello", func(w http.ResponseWriter, r *http.Request) {
+		helloCalled++
+	})
+	r.SetNotFoundHandler(func(w http.ResponseWriter, r *http.Request) {
+		notFoundCalled++
+	})
+	req := httptest.NewRequest(http.MethodGet, "/hello", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	if helloCalled != 1 {
+		t.Fatalf("expected hello to be called once but got %d", helloCalled)
+	}
+	if notFoundCalled != 0 {
+		t.Fatalf("expected notFound to not be called but got %d", notFoundCalled)
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/", nil)
+	w = httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	if helloCalled != 1 {
+		t.Fatalf("expected hello to not be called again but got %d", helloCalled)
+	}
+	if notFoundCalled != 1 {
+		t.Fatalf("expected notFound to be called exactly once but got %d", notFoundCalled)
+	}
+
+	req = httptest.NewRequest(http.MethodPost, "/another", nil)
+	w = httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	if helloCalled != 1 {
+		t.Fatalf("expected hello to not be called again but got %d", helloCalled)
+	}
+	if notFoundCalled != 2 {
+		t.Fatalf("expected notFound to be called another time but got %d", notFoundCalled)
+	}
+}

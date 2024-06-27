@@ -10,11 +10,12 @@ import (
 // Router wraps the net/http ServeMux with
 // helpre methods.
 type Router struct {
-	m       *http.ServeMux
-	mws     []Middleware
-	once    sync.Once
-	handler http.Handler
-	initted bool
+	m        *http.ServeMux
+	mws      []Middleware
+	once     sync.Once
+	handler  http.Handler
+	initted  bool
+	notFound http.HandlerFunc
 }
 
 // NewRouter returns a ready ServeMux wrapper.
@@ -28,6 +29,14 @@ var _ http.Handler = &Router{}
 
 func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	r.once.Do(r.init)
+	// Potentially remove this if statement when this issue resolves:
+	// https://github.com/golang/go/issues/65648
+	if r.notFound != nil { // check notFound first so we don't call m.Handler twice.
+		if _, p := r.m.Handler(req); p == "" {
+			r.notFound(w, req)
+			return
+		}
+	}
 	r.handler.ServeHTTP(w, req)
 }
 
@@ -99,6 +108,12 @@ func (r *Router) Options(path string, hf http.HandlerFunc) {
 // the http method TRACE.
 func (r *Router) Trace(path string, hf http.HandlerFunc) {
 	r.Handle(http.MethodTrace, path, hf)
+}
+
+// SetNotFoundHandler sets a handler that will be called if no routes were found
+// by the serve mux.
+func (r *Router) SetNotFoundHandler(hf http.HandlerFunc) {
+	r.notFound = hf
 }
 
 // Middleware describes the signature of an http
