@@ -269,3 +269,42 @@ func TestNotFoundHandler(t *testing.T) {
 		t.Fatalf("expected notFound to be called another time but got %d", notFoundCalled)
 	}
 }
+
+// TestNotFoundWithMiddleware tests that middlewares are still invoked even if
+// the request cannot be routed.
+func TestNotFoundWithMiddleware(t *testing.T) {
+	m := muxw.NewRouter()
+
+	var mwcalled bool
+	m.Use(func(h http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			mwcalled = true
+			h.ServeHTTP(w, r)
+		})
+	})
+
+	var homecalled bool
+	m.Get("/", func(w http.ResponseWriter, r *http.Request) {
+		homecalled = true
+	})
+
+	var notfoundcalled bool
+	m.SetNotFoundHandler(func(w http.ResponseWriter, r *http.Request) {
+		notfoundcalled = true
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/another", nil)
+	w := httptest.NewRecorder()
+	m.ServeHTTP(w, req)
+
+	if !mwcalled {
+		t.Fatal("expected the middleware to be called even if the route is not found")
+	}
+	if homecalled {
+		t.Fatal("expected home handler to not be called")
+	}
+	if !notfoundcalled {
+		t.Fatal("expected not found to be called")
+	}
+
+}

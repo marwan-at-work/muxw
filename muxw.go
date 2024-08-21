@@ -29,14 +29,6 @@ var _ http.Handler = &Router{}
 
 func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	r.once.Do(r.init)
-	// Potentially remove this if statement when this issue resolves:
-	// https://github.com/golang/go/issues/65648
-	if r.notFound != nil { // check notFound first so we don't call m.Handler twice.
-		if _, p := r.m.Handler(req); p == "" {
-			r.notFound(w, req)
-			return
-		}
-	}
 	r.handler.ServeHTTP(w, req)
 }
 
@@ -44,7 +36,19 @@ func (r *Router) init() {
 	if r.initted {
 		panic("already initialized")
 	}
-	r.handler = chain(r.m, r.mws...)
+	var handler http.Handler = r.m
+	// Potentially remove this if statement when this issue resolves:
+	// https://github.com/golang/go/issues/65648
+	if r.notFound != nil { // check notFound first so we don't call m.Handler twice.
+		handler = http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+			if _, p := r.m.Handler(req); p == "" {
+				r.notFound(w, req)
+				return
+			}
+			r.m.ServeHTTP(w, req)
+		})
+	}
+	r.handler = chain(handler, r.mws...)
 	r.initted = true
 }
 
